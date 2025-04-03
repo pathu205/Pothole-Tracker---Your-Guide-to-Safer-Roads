@@ -1,0 +1,634 @@
+// Initialize the map with default view
+var map = L.map('map').setView([20.5937, 78.9629], 5); // Default to India
+
+// Google Maps Layers
+var googleLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    maxZoom: 19,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: 'Map data &copy; <a href="https://www.google.com/maps">Google Maps</a>'
+}).addTo(map);
+
+var satelliteLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    maxZoom: 19,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: 'Map data &copy; <a href="https://www.google.com/maps">Google Maps</a>'
+});
+
+var hybridLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    maxZoom: 22,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: 'Map data &copy; <a href="https://www.google.com/maps">Google Maps</a>'
+});
+
+var baseMaps = {
+    "Google Map": googleLayer,
+    "Satellite": hybridLayer
+};
+
+L.control.layers(baseMaps).addTo(map);
+
+
+
+// API URL for pothole data
+const apiUrl = 'https://secure-json-file-server-1.onrender.com/api/potholes';
+const loadingElement = document.getElementById('loading');
+
+let watchId = null;
+let bestPosition = null; // Store the best available position
+let routingControl = null;
+let currentLocationMarker = null; // Marker for current location
+
+let routeWaypoints = []; // Store waypoints for the route
+let allMarkers = []; // Store all markers for cleanup
+
+
+
+const geocodeService = 'https://nominatim.openstreetmap.org/search';
+
+
+
+function getSizeDistribution(potholeMarkers) {
+    const sizeCounts = { large: 0, medium: 0, small: 0 };
+    
+    potholeMarkers.forEach(marker => {
+        const size = marker.options.size.toLowerCase();
+        if (sizeCounts.hasOwnProperty(size)) {
+            sizeCounts[size]++;
+        }
+    });
+    
+    return `Large: ${sizeCounts.large}, Medium: ${sizeCounts.medium}, Small: ${sizeCounts.small}`;
+}
+
+function calculatePotholeCountAndPercentage(routeWaypoints, potholeData) {
+    let potholesNearRoute = new Set(); // Use Set to avoid counting same pothole multiple times
+
+    // Log the waypoints and pothole data for debugging
+    console.log("Route Waypoints:", routeWaypoints);
+    console.log("Pothole Data:", potholeData);
+
+    potholeData.forEach(pothole => {
+        routeWaypoints.forEach(waypoint => {
+            const distance = getDistance(waypoint, pothole);
+            if (distance <= 50) { // Assuming 50 meters as the threshold
+                potholesNearRoute.add(pothole); // Add pothole to Set
+            }
+        });
+    });
+
+    const totalPotholes = potholeData.length;
+    const percentage = totalPotholes > 0 ? 
+        (potholesNearRoute.size / totalPotholes) * 100 : 0; // Calculate percentage
+
+    return { potholeCount: potholesNearRoute.size, percentage }; // Return both count and percentage
+}         
+
+// Fetch pothole data and display markers
+showLoading(false);
+fetch(apiUrl)
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        showLoading(false);
+        console.log("Fetched Pothole Data:", data); // Log the fetched data
+        if (data.success && data.data.length > 0) {
+            // Store pothole data but don't display markers yet
+            potholeMarkers = data.data.map(pothole => {
+                // Set marker size based on pothole size
+                let radius;
+                switch(pothole.size.toLowerCase()) {
+                    case 'large':
+                        radius = 10;
+                        break;
+                    case 'medium':
+                        radius = 8;
+                        break;
+                    case 'small':
+                        radius = 6;
+                        break;
+                    default:
+                        radius = 8;
+                }
+
+                // Define colors based on pothole size
+                let color, fillColor;
+                switch(pothole.size.toLowerCase()) {
+                    case 'large':
+                        color = '#FF0000'; // Red
+                        fillColor = '#FF0000';
+                        break;
+                    case 'medium':
+                        color = '#FFA500'; // Orange
+                        fillColor = '#FFA500';
+                        break;
+                    case 'small':
+                        color = '#00FF00'; // Bright Green
+                        fillColor = '#00FF00';
+                        break;
+                    default:
+                        color = '#FF4500'; // Default orange-red
+                        fillColor = '#FF4500';
+                }
+
+                const marker = L.circleMarker([pothole.latitude, pothole.longitude], {
+                    radius: radius,
+                    color: color,
+                    fillColor: fillColor,
+                    fillOpacity: 0.7,
+                    size: pothole.size
+                }).bindPopup(`<strong>Pothole detected!</strong><br>Latitude: ${pothole.latitude}<br>Longitude: ${pothole.longitude}<br>Size: ${pothole.size}`);
+                allMarkers.push(marker);
+                return marker;
+
+
+            });
+        } else {
+            alert('No pothole data available!');
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching pothole data:', error);
+        alert('Failed to fetch pothole data from the server.');
+    });
+
+// Function to calculate distance between two points
+function getDistance(point1, point2) {
+    const R = 6371e3; // metres
+    const lat1 = point1.lat;
+    const lat2 = point2.latitude;
+    const lon1 = point1.lng;
+    const lon2 = point2.longitude;
+
+    const φ1 = lat1 * Math.PI/180; // φ in radians
+    const φ2 = lat2 * Math.PI/180; // φ in radians
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c; // in metres
+}
+
+// Function to show/hide loading animation
+function showLoading(show) {
+    if (loadingElement) {
+        loadingElement.style.display = show ? 'block' : 'none';
+    }
+}
+
+// Function to continuously update user location
+async function useCurrentLocation() {
+    var fromInput = document.getElementById('from');
+
+    if (!navigator.geolocation) {
+        alert("Geolocation is not supported by this browser.");
+        return;
+    }
+
+    fromInput.value = "Fetching location...";
+
+    try {
+        if (navigator.permissions) {
+            let permissionStatus = await navigator.permissions.query({ name: "geolocation" });
+
+            if (permissionStatus.state === "denied") {
+                alert("Location permission is denied. Please allow location access in browser settings.");
+                fromInput.value = "";
+                return;
+            }
+        }
+
+        watchId = navigator.geolocation.watchPosition(
+            async function (position) {
+                const { latitude: lat, longitude: lon, accuracy } = position.coords;
+
+                console.log(`Live Location Update: Lat: ${lat}, Lon: ${lon}, Accuracy: ${accuracy} meters`);
+
+                // Update best available position dynamically
+                bestPosition = { lat, lon, accuracy };
+
+                try {
+                    let response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`);
+                    let data = await response.json();
+
+                    if (data && data.display_name) {
+                        fromInput.value = data.display_name;
+                    } else {
+                        fromInput.value = `Lat: ${lat}, Lon: ${lon}`;
+                    }
+
+                    // Recalculate route dynamically
+                    calculateRoute();
+
+                } catch (error) {
+                    fromInput.value = "Unable to fetch address";
+                    console.error("Error fetching location:", error);
+                }
+            },
+            function (error) {
+                console.error("Geolocation error:", error);
+                alert("Could not fetch location. Please try again.");
+                fromInput.value = "";
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 2000,
+                maximumAge: 2000
+            },
+            function stopTracking() {
+                if (watchId !== null) {
+                    navigator.geolocation.clearWatch(watchId);
+                    console.log("Location tracking stopped.");
+                    alert("Location tracking stopped.");
+                    watchId = null; // Reset watchId
+                }
+            }
+        );
+    } catch (err) {
+        console.error("Error requesting location permissions:", err);
+        alert("Could not request location permissions. Please check browser settings.");
+    }
+}
+
+// Function to calculate and update route dynamically
+function calculateRoute() {
+    if (!map) {
+        console.error("Map is not initialized.");
+        alert("Error: Map is not loaded. Please check if Leaflet is included.");
+        return;
+    }
+
+    var from = document.getElementById('from').value;
+    var to = document.getElementById('to').value;
+
+    if (!to) {
+        alert("Please enter a destination location.");
+        return;
+    }
+
+    showLoading(false);
+
+    // Remove previous route before adding a new one
+    if (routingControl) {
+        map.removeControl(routingControl);
+        routingControl = null; // Reset routing control
+    }
+
+function showPotholesAlongRoute(routes, potholeMarkers) {
+    // Clear all existing markers
+    if (allMarkers && allMarkers.length > 0) {
+        allMarkers.forEach(marker => {
+            if (marker && map.hasLayer(marker)) {
+                map.removeLayer(marker);
+            }
+        });
+        allMarkers = [];
+    }
+    
+    // Clear any remaining markers that might not be in allMarkers
+    map.eachLayer(layer => {
+        if (layer instanceof L.CircleMarker) {
+            map.removeLayer(layer);
+        }
+    });
+
+
+
+
+    if (!routes || routes.length === 0) {
+        console.error("No routes available");
+        return;
+    }
+
+
+
+    // Create a map to track which potholes have been added
+    const addedPotholes = new Set();
+
+    // Process each route (primary and alternatives)
+    routes.forEach((route, routeIndex) => {
+        const routeWaypoints = route.coordinates;
+    
+        // Add potholes for this route
+        potholeMarkers.forEach(marker => {
+            const potholeLatLng = marker.getLatLng();
+            const isNearRoute = routeWaypoints.some(waypoint => {
+                const distance = getDistance({
+                    lat: waypoint.lat,
+                    lng: waypoint.lng
+                }, {
+                    latitude: potholeLatLng.lat,
+                    longitude: potholeLatLng.lng
+                });
+                return distance <= 50;
+            });
+
+            if (isNearRoute && !addedPotholes.has(marker)) {
+                // Use the original pothole colors instead of route color
+                const routeMarker = L.circleMarker(potholeLatLng, {
+                    radius: marker.options.radius,
+                    color: marker.options.color,
+                    fillColor: marker.options.fillColor,
+                    fillOpacity: 0.7,
+                    size: marker.options.size
+                }).bindPopup(marker.getPopup().getContent());
+                
+                allMarkers.push(routeMarker);
+                routeMarker.addTo(map);
+                addedPotholes.add(marker);
+
+            }
+        });
+    });
+}
+
+    function processRouting(fromLatLng, toLatLng) {
+        // Remove the previous route before adding a new one
+        if (routingControl) {
+            map.removeControl(routingControl);
+        }
+        // Remove previous 'from' marker if it exists
+        if (fromMarker) {
+            map.removeLayer(fromMarker);
+            fromMarker = null;
+        }
+
+        // Define a custom car icon
+        var carIcon = L.icon({
+            iconUrl: "C:/Users/Admin/OneDrive/Desktop/last Map/Last Final Map/car logo.png", // Ensure the path is correct
+            iconSize: [60, 60],  // Adjust size as needed
+            iconAnchor: [20, 20], // Center the icon properly
+            popupAnchor: [0, -20] 
+        });
+
+        // Add a marker at the fromLocation with the custom car icon
+        var fromMarker = L.marker(fromLatLng, { icon: carIcon }).addTo(map);
+
+        // Create routing control
+        routingControl = L.Routing.control({
+            waypoints: [
+                L.latLng(fromLatLng),
+                L.latLng(toLatLng)
+            ],
+            routeWhileDragging: false,
+            draggableWaypoints: false,
+            addWaypoints: false,
+            showAlternatives: true,
+            createMarker: function(i, waypoint, n) {
+                if (i === 0) { 
+                    // Use the custom car icon for the starting location
+                    return fromMarker;
+                } else {
+                    // Default marker for the destination
+                    return L.marker(waypoint.latLng);
+                }
+            },
+            altLineOptions: {
+                styles: [
+                    { color: 'black', opacity: 0.15, weight: 9 },
+                    { color: 'white', opacity: 0.8, weight: 6 },
+                    { color: 'blue', opacity: 0.5, weight: 2 }
+                ]
+            },
+            lineOptions: {
+                styles: [
+                    { color: '#3388ff', opacity: 1, weight: 5 }
+                ],
+                interactive: true, // Make the route line interactive for hover events
+                bubblingMouseEvents: false // Prevent event propagation
+            }
+        }).addTo(map);
+
+        // Create a tooltip div
+        const tooltip = document.createElement('div');
+        tooltip.className = 'pothole-tooltip';
+        tooltip.style.position = 'fixed';
+        tooltip.style.display = 'none';
+        tooltip.style.backgroundColor = 'white';
+        tooltip.style.padding = '15px';
+        tooltip.style.bborder = '2px solid #ff4500';
+        tooltip.style.borderRadius = '8px';
+        tooltip.style.zIndex = '1000';
+        tooltip.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+        tooltip.style.minWidth = '250px';
+        tooltip.style.fontFamily = 'Arial, sans-serif';
+        tooltip.style.pointerEvents = 'none'; // Prevent tooltip from blocking interactions
+        
+        // Add tooltip to document body
+        document.body.appendChild(tooltip);
+        console.log('Tooltip element created and appended to DOM');
+
+        // Capture route waypoints when the route is found
+        routingControl.on('routesfound', function(e) {
+            const routes = e.routes;
+            console.log("Routes captured:", routes);
+            
+            // Show potholes along all routes and calculate statistics
+            showPotholesAlongRoute(routes, potholeMarkers);
+            
+            // Calculate statistics for each route first
+            const routeStats = routes.map((route, index) => {
+                const waypoints = route.coordinates;
+                const { potholeCount, percentage } = calculatePotholeCountAndPercentage(waypoints, potholeMarkers.map(marker => {
+                    const latLng = marker.getLatLng();
+                    return { latitude: latLng.lat, longitude: latLng.lng };
+                }));
+                
+                return {
+                    routeIndex: index,
+                    potholeCount,
+                    percentage,
+                    distance: (route.summary.totalDistance / 1000).toFixed(2) + ' km'
+                };
+            });
+
+            // Clear previous pothole count markers
+            if (window.potholeCountMarkers) {
+                window.potholeCountMarkers.forEach(marker => map.removeLayer(marker));
+            }
+            window.potholeCountMarkers = [];
+
+            // Add pothole count markers along the route
+            routes.forEach((route, index) => {
+                const waypoints = route.coordinates;
+                const potholeCount = routeStats[index].potholeCount;
+                const percentage = routeStats[index].percentage;
+
+                // Add a marker at the midpoint of the route
+                const midpoint = waypoints[Math.floor(waypoints.length / 2)];
+                const marker = L.marker([midpoint.lat, midpoint.lng], {
+                    icon: L.divIcon({
+                        className: 'pothole-count-marker',
+                        html: `
+                            <div style="
+                                position: relative;
+                                background: linear-gradient(45deg, #ff6b6b, #ff4500);
+                                color: white;
+                                padding: 12px 16px;
+                                border-radius: 8px;
+                                font-weight: bold;
+                                border: 3px solid white;
+                                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                                font-size: 16px;
+                                min-width: 100px;
+                                height: 60px;
+                                display: flex;
+                                flex-direction: column;
+                                align-items: center;
+                                justify-content: center;
+                                animation: pulse 1.5s infinite;
+                            ">
+                                <div>Potholes: ${potholeCount}</div>
+                                <div>Percent: ${percentage.toFixed(2)}%</div>
+                                <div style="
+                                    position: absolute;
+                                    bottom: -10px;
+                                    left: 50%;
+                                    margin-left: -10px;
+                                    width: 0;
+                                    height: 0;
+                                    border-left: 10px solid transparent;
+                                    border-right: 10px solid transparent;
+                                    border-top: 10px solid #ff4500;
+                                "></div>
+                            </div>
+                        `,
+                        iconSize: [100, 70]
+                    })
+                }).addTo(map);
+                window.potholeCountMarkers.push(marker);
+
+                // Add tooltip with detailed info
+                marker.bindPopup(`
+                    <strong>Pothole Count:</strong> ${potholeCount}<br>
+                    <strong>Risk Level:</strong> ${percentage.toFixed(2)}%<br>
+                    <strong>Route:</strong> ${index === 0 ? 'Primary' : 'Alternative ' + index}
+                `);
+            });
+
+            // Add mouse move event to route line
+            const routeLine = routingControl._line;
+            console.log('Route line element:', routeLine); // Debug log
+            
+            if (routeLine) {
+                routeLine.on('mousemove', function(e) {
+                    console.log('Mouse moved over route at coordinates:', e.latlng); // Debug log
+                    if (!tooltip.parentElement) {
+                        console.error('Tooltip is not attached to DOM');
+                        return;
+                    }
+                    
+                    // Update tooltip position and content
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = `${e.originalEvent.pageX + 15}px`;
+                    tooltip.style.top = `${e.originalEvent.pageY + 15}px`;
+                    
+                    // Add slight delay to prevent flickering
+                    clearTimeout(tooltip.timer);
+                    tooltip.timer = setTimeout(() => {
+                        tooltip.style.display = 'block';
+                    }, 50);
+
+                    tooltip.innerHTML = `
+                        <div class="pothole-info-wrapper">
+                            <div class="pothole-header">Route Pothole Analysis</div>
+                            <div class="pothole-total" style="font-size: 1.2em; font-weight: bold; margin: 10px 0;">
+                                Total Potholes: ${routeStats.reduce((sum, stat) => sum + stat.potholeCount, 0)}
+                            </div>
+
+                            ${routeStats.map((stat, index) => `
+                                <div class="route-stats ${index === 0 ? 'primary-route' : 'alternative-route'}">
+                                    <div class="route-title">${index === 0 ? 'Primary Route' : `Alternative ${index}`}</div>
+                                    <div class="pothole-stats">
+                                        <div class="stat-item">
+                                            <span class="stat-label">Distance:</span>
+                                            <span class="stat-value">${stat.distance}</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Potholes:</span>
+                                            <span class="stat-value">${stat.potholeCount}</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">Risk Level:</span>
+                                            <span class="stat-value">${stat.percentage.toFixed(2)}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            <div class="pothole-note">Hover along any route for detailed analysis</div>
+                        </div>
+                    `;
+                });
+
+                routeLine.on('mouseout', function() {
+                    // Hide tooltip with fade effect
+                    tooltip.style.transition = 'opacity 0.2s';
+                    tooltip.style.opacity = '0';
+                    setTimeout(() => {
+                        tooltip.style.display = 'none';
+                        tooltip.style.opacity = '1';
+                    }, 200);
+                });
+            }
+        });
+    }
+
+    if (bestPosition) {
+        fetchGeocode(to).then(toLatLng => {
+            if (toLatLng) {
+                const fromLatLng = [bestPosition.lat, bestPosition.lon]; // Declare here to avoid redeclaration
+                processRouting(fromLatLng, toLatLng);
+            }
+        });
+    } else if (from) {
+        // If the user manually enters a 'from' location, fetch its coordinates
+        fetchGeocode(from).then(fromLatLng => {
+            if (fromLatLng) {
+                fetchGeocode(to).then(toLatLng => {
+                    if (toLatLng) {
+                        processRouting(fromLatLng, toLatLng);
+                    } else {
+                        alert("Geocoding failed for the destination. Please check the input.");
+                    }
+                });
+            } else {
+                alert("Geocoding failed for the 'from' location. Please check the input.");
+            }
+        });
+    } else {
+        alert("Waiting for location update...");
+        showLoading(false);
+    }
+}
+
+// Function to fetch geocode data for an address
+async function fetchGeocode(address) {
+    try {
+        let response = await fetch(`${geocodeService}?q=${encodeURIComponent(address)}&format=json`);
+
+        let data = await response.json();
+        return data.length > 0 ? [data[0].lat, data[0].lon] : null;
+    } catch (err) {
+        console.error(`Error fetching geocoding data for ${address}:`, err);
+        alert(`An error occurred while fetching the location: ${address}`);
+        return null;
+    }
+}
+
+// Function to stop watching location updates
+function stopTracking() {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        console.log("Location tracking stopped.");
+        alert("Location tracking stopped.");
+        watchId = null;  // Reset watchId
+        bestPosition = null;  // Reset stored GPS location
+    }
+}

@@ -1,0 +1,464 @@
+.pothole-count-marker {
+    text-align: center;
+    font-family: 'Poppins', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    transition: all 0.3s ease-in-out;
+    background: linear-gradient(135deg, #f4f4f4, #eaeaea); /* Gradient background */
+  }
+  
+  /* Heading */
+  h1 {
+    color: #2b2c2d;
+    text-align: center;
+    margin: 15px 0;
+    font-size: 24px;
+    font-weight: bold;
+  }
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+#map {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 100%;
+}
+
+.pothole-count-marker {
+    text-align: center;
+    cursor: pointer;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+  
+  /* Map Styles */
+#map {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100vh;
+    width: 100vw;
+    z-index: 1;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    overflow: hidden;
+}
+
+   /* Pothole Count Display */
+   #pothole-count {
+    background-color: rgba(255, 255, 255, 0.9);
+    width: 120px;  /* Increased width to accommodate text */
+    height: 40px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    font-family: Arial, sans-serif;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #333;
+    border: 2px solid #ff4500;
+    transition: all 0.3s ease;
+    
+    /* Positioning */
+    position: absolute;
+    bottom: 20px;
+    left: 20px; /* Changed from right to left */
+    z-index: 1000;
+    
+    /* Center text */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+  }
+
+  #pothole-count:hover {
+    background-color: #ff4500;
+    color: white;
+    transform: scale(1.05);
+    transition: all 0.3s ease;
+  }
+
+  .leaflet-control-layers, .leaflet-control-geocoder  {
+      background: rgba(50, 50, 50, 0.95) !important;
+      color: white;
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 14px;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+    }
+    .leaflet-control-layers:hover, .leaflet-control-geocoder:hover {
+      transform: scale(1.05);
+      transition: 0.3s;
+    }
+    .leaflet-control-geocoder input {
+      color: white !important;
+      background: rgba(0, 0, 0, 0.8) !important;
+      border: none;
+      padding: 5px;
+      border-radius: 4px;
+    }
+    /* Container Styling */
+.leaflet-routing-container {
+    background: linear-gradient(135deg, #3c3c3c, #605557); /* Gradient background */
+    border-radius: 15px; /* Smooth rounded corners */
+    padding: 15px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4); /* Stronger shadow for depth */
+    font-family: 'Poppins', sans-serif;
+    color: #fff; /* White text for contrast */
+    max-width: 350px;
+    overflow: hidden;
+    animation: fadeIn 0.5s ease-in-out; /* Smooth fade-in animation */
+}
+
+/* Table Styling */
+.leaflet-routing-container table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(255, 255, 255, 0.1); /* Slight transparency */
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* Table Headers */
+.leaflet-routing-container th {
+    background: #d6a3a9; /* Brand red */
+    color: #fff;
+    padding: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+/* Table Rows */
+.leaflet-routing-container tr {
+    transition: all 0.3s ease-in-out;
+}
+
+/* Table Data Cells */
+.leaflet-routing-container td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Hover Effect */
+.leaflet-routing-container tr:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.02); /* Slight pop-up effect */
+}
+
+/* Responsive Adjustments */
+@media (max-width: 480px) {
+    .leaflet-routing-container {
+        max-width: 100%;
+        padding: 10px;
+    }
+
+    .leaflet-routing-container table {
+        font-size: 14px;
+    }
+}
+.leaflet-control-zoom {
+    background: rgba(125, 92, 97, 0.8); /* Semi-transparent background */
+    border: 2px solid rgba(94, 61, 66, 1); /* Solid border */
+    border-radius: 10px; /* Rounded corners */
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.3); /* Soft shadow */
+    overflow: hidden; /* Prevents content overflow */
+}
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+    background: rgba(94, 61, 66, 0.9); /* Button background */
+    color: white; /* Text color */
+    font-size: 18px; /* Adjust font size */
+    border: none;
+    padding: 8px;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+}
+
+.leaflet-control-zoom-in:hover,
+.leaflet-control-zoom-out:hover {
+    background: rgba(125, 92, 97, 1); /* Hover effect */
+    transform: scale(1.1); /* Slight zoom effect */
+}
+
+.leaflet-control-zoom-in:active,
+.leaflet-control-zoom-out:active {
+    transform: scale(1); /* Remove zoom on click */
+}
+.leaflet-control-zoom {
+    position: absolute !important;
+    bottom: 10px;  /* Adjust as needed */
+    right: 10px;   /* Moves it to the right corner */
+    z-index: 1000; /* Ensures it stays above the map */
+}
+
+
+/* Stylish Buttons */
+.leaflet-routing-container button {
+    background: linear-gradient(90deg, #7d5c61, #5e3d42);
+    color: #fff;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 25px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    text-align: center;
+}
+
+.leaflet-routing-container button:hover {
+    background: #4f487d;
+    box-shadow: 0 4px 10px rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+  
+  /* Sidebar */
+  #sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 250px;
+    height: 100vh;
+    background: rgba(43, 44, 45, 0.9); /* Glassmorphism effect */
+    backdrop-filter: blur(8px);
+    padding: 20px;
+    box-shadow: 4px 0px 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease-in-out;
+    z-index: 1000;
+    overflow-y: auto;
+  }
+  
+  /* Sidebar Collapsed */
+  #sidebar.collapsed {
+    width: 0;
+    padding: 0;
+    box-shadow: none;
+    visibility: hidden;
+  }
+  
+  /* Sidebar Header */
+  #sidebar h3,h4 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #f4f4f4;
+    font-size: 20px;
+    font-weight: bold;
+    letter-spacing: 1px;
+  }
+  
+  /* Inputs & Buttons */
+  #sidebar input,
+  #sidebar button {
+    width: 85%;
+    margin: 12px auto;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #b7aca2;
+    font-size: 14px;
+    display: block;
+    transition: all 0.3s ease-in-out;
+  }
+  
+  #sidebar input:focus {
+    outline: none;
+    border-color: #0078ff;
+    box-shadow: 0 0 8px rgba(0, 120, 255, 0.5);
+  }
+  
+  /* Button */
+  #sidebar button {
+    background: linear-gradient(135deg, #262626, #1a1a1a);
+    color: white;
+    font-weight: bold;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  }
+  
+  #sidebar button:hover {
+    background: linear-gradient(135deg, #001128, #003366);
+    transform: scale(1.05);
+    box-shadow: 0 6px 12px rgba(0, 17, 40, 0.4);
+  }
+  
+  /* Sidebar Toggle Button */
+  #map-control-btn {
+    position: fixed;
+    top: 350px;
+    left: 270px;
+    width: 45px;
+    height: 45px;
+    background: url('C:/Users/Admin/OneDrive/Desktop/last Map/arrow_left_2x.png') no-repeat center;
+    background-size: contain;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease-in-out;
+    z-index: 2000;
+    border-radius: 50%;
+    box-shadow: 0 4px 8px rgba(3, 19, 56, 0.2);
+  }
+  
+  #map-control-btn:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    background: rgba(61, 2, 52, 0.281);
+    transform: scale(1.1);
+  }
+  
+  #sidebar.collapsed + #map-control-btn {
+      left: 10px;
+      transform: rotate(180deg);
+    }
+  /* Loading Screen */
+  #loading {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 20px;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 25px;
+    border-radius: 10px;
+    border: 2px solid #001128;
+    box-shadow: 0 6px 12px rgba(0, 17, 40, 0.3);
+    z-index: 1000;
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    background-color: rgba(51, 51, 51, 0.9);
+    color: white;
+    padding: 6px;
+    border-radius: 6px;
+    font-size: 12px;
+    z-index: 9999;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  }
+  
+  /* User Message */
+  .user-message {
+    color: #001128;
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  #complaint-text {
+      width: 90%;
+      height: 90px;
+      resize: none;
+      padding: 10px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+      display: block;
+    }
+
+    #complaint-text:focus {
+      border-color: #0078ff;
+      box-shadow: 0 0 8px rgba(0, 120, 255, 0.5);
+      outline: none;
+    }
+  
+  /* Animations */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+  /* Responsive Styles */
+  @media (max-width: 768px) {
+    #sidebar {
+      width: 200px;
+      padding: 15px;
+    }
+  
+    #sidebar.collapsed {
+      width: 0;
+      padding: 0;
+    }
+
+  
+  
+    #map {
+      width: 100%;
+    }
+  
+    #map-control-btn {
+      left: 210px;
+      width: 40px;
+      height: 40px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    #sidebar {
+      width: 180px;
+      padding: 10px;
+    }
+  
+    #map-control-btn {
+      left: 190px;
+      width: 35px;
+      height: 35px;
+    }
+  
+    #map {
+      height: 500px;
+    }
+  }
